@@ -24,6 +24,7 @@ import argparse
 import base64
 import csv
 import gzip
+import io
 import os
 import ssl
 import sys
@@ -54,23 +55,30 @@ def _make_ssl_context() -> ssl.SSLContext:
     return ctx
 
 
-def _run_batch(sql: str, host: str, port: int, user: str, password: str,
-               database: str, secure: bool):
-    scheme = "https" if secure else "http"
-    url = f"{scheme}://{host}:{port}/?database={database}"
-    data = sql.encode("utf-8")
-    creds = base64.b64encode(f"{user}:{password}".encode()).decode()
+def _http_post(url: str, data: bytes, creds: str, ctx,
+               extra_headers: dict | None = None) -> None:
     req = urllib.request.Request(url, data=data, method="POST")
     req.add_header("Authorization", f"Basic {creds}")
     req.add_header("Content-Type", "text/plain; charset=utf-8")
     req.add_header("Content-Length", str(len(data)))
-    ctx = _make_ssl_context() if secure else None
+    if extra_headers:
+        for k, v in extra_headers.items():
+            req.add_header(k, v)
     try:
         with urllib.request.urlopen(req, context=ctx) as resp:
             resp.read()
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"HTTP {e.code}: {body[:500]}")
+
+
+def _run_batch(sql: str, host: str, port: int, user: str, password: str,
+               database: str, secure: bool):
+    scheme = "https" if secure else "http"
+    url    = f"{scheme}://{host}:{port}/?database={database}"
+    creds  = base64.b64encode(f"{user}:{password}".encode()).decode()
+    ctx    = _make_ssl_context() if secure else None
+    _http_post(url, sql.encode("utf-8"), creds, ctx)
 
 
 def _find_targets(input_dir: str, tables_filter: list | None) -> dict:
@@ -98,25 +106,13 @@ def _find_targets(input_dir: str, tables_filter: list | None) -> dict:
 def _send_csv_chunk(rows: list, header: list, query: str, url: str,
                     creds: str, ctx) -> None:
     """Gzip a batch of CSV rows in memory and POST to ClickHouse."""
-    import io
     buf = io.BytesIO()
     with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
-        w = csv.writer(io.TextIOWrapper(gz, encoding="utf-8", newline=""))
-        w.writerow(header)
-        w.writerows(rows)
-        w.detach()
-    data = buf.getvalue()
-    req = urllib.request.Request(url, data=data, method="POST")
-    req.add_header("Authorization",    f"Basic {creds}")
-    req.add_header("Content-Encoding", "gzip")
-    req.add_header("Content-Type",     "text/plain; charset=utf-8")
-    req.add_header("Content-Length",   str(len(data)))
-    try:
-        with urllib.request.urlopen(req, context=ctx) as resp:
-            resp.read()
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {e.code}: {body[:500]}")
+        tw = io.TextIOWrapper(gz, encoding="utf-8", newline="")
+        csv.writer(tw).writerows([header] + rows)
+        tw.detach()
+    _http_post(url, buf.getvalue(), creds, ctx,
+               extra_headers={"Content-Encoding": "gzip"})
 
 
 def _load_csv_file(filepath: str, table_name: str, csv_chunk_rows: int,
@@ -124,25 +120,23 @@ def _load_csv_file(filepath: str, table_name: str, csv_chunk_rows: int,
                    database: str, secure: bool, dry_run: bool) -> tuple[int, float]:
     """Load one .csv.gz file in row-batched chunks. Returns (total_rows, elapsed)."""
     t0 = time.monotonic()
-    col_list = query = url = creds = ctx = None
-
-    if not dry_run:
-        # Read header without loading whole file
-        with gzip.open(filepath, "rt", encoding="utf-8") as f:
-            header = next(csv.reader(f))
-        col_list = ", ".join(header)
-        query  = f"INSERT INTO {database}.{table_name} ({col_list}) FORMAT CSVWithNames"
-        scheme = "https" if secure else "http"
-        url    = f"{scheme}://{host}:{port}/?{urllib.parse.urlencode({'query': query})}"
-        creds  = base64.b64encode(f"{user}:{password}".encode()).decode()
-        ctx    = _make_ssl_context() if secure else None
-
     total_rows = 0
     batch: list = []
 
     with gzip.open(filepath, "rt", encoding="utf-8") as f:
         reader = csv.reader(f)
         header = next(reader)
+
+        if not dry_run:
+            col_list = ", ".join(header)
+            query  = f"INSERT INTO {database}.{table_name} ({col_list}) FORMAT CSVWithNames"
+            scheme = "https" if secure else "http"
+            url    = f"{scheme}://{host}:{port}/?{urllib.parse.urlencode({'query': query})}"
+            creds  = base64.b64encode(f"{user}:{password}".encode()).decode()
+            ctx    = _make_ssl_context() if secure else None
+        else:
+            query = url = creds = ctx = None
+
         for row in reader:
             batch.append(row)
             if len(batch) >= csv_chunk_rows:
@@ -225,6 +219,8 @@ def main():
 
     if args.batch_inserts < 1:
         parser.error("--batch-inserts must be >= 1")
+    if args.csv_chunk_rows < 1:
+        parser.error("--csv-chunk-rows must be >= 1")
 
     # Resolve target files
     targets = _find_targets(args.input_dir, args.tables)
