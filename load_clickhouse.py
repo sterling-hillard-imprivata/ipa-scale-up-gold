@@ -95,38 +95,70 @@ def _find_targets(input_dir: str, tables_filter: list | None) -> dict:
     return result
 
 
-def _load_csv_file(filepath: str, table_name: str,
+def _send_csv_chunk(rows: list, header: list, query: str, url: str,
+                    creds: str, ctx) -> None:
+    """Gzip a batch of CSV rows in memory and POST to ClickHouse."""
+    import io
+    buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
+        w = csv.writer(io.TextIOWrapper(gz, encoding="utf-8", newline=""))
+        w.writerow(header)
+        w.writerows(rows)
+        w.detach()
+    data = buf.getvalue()
+    req = urllib.request.Request(url, data=data, method="POST")
+    req.add_header("Authorization",    f"Basic {creds}")
+    req.add_header("Content-Encoding", "gzip")
+    req.add_header("Content-Type",     "text/plain; charset=utf-8")
+    req.add_header("Content-Length",   str(len(data)))
+    try:
+        with urllib.request.urlopen(req, context=ctx) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {e.code}: {body[:500]}")
+
+
+def _load_csv_file(filepath: str, table_name: str, csv_chunk_rows: int,
                    host: str, port: int, user: str, password: str,
                    database: str, secure: bool, dry_run: bool) -> tuple[int, float]:
-    """Load one .csv.gz file into ClickHouse via FORMAT CSVWithNames. Returns (rows, elapsed)."""
+    """Load one .csv.gz file in row-batched chunks. Returns (total_rows, elapsed)."""
     t0 = time.monotonic()
-    with gzip.open(filepath, "rt", encoding="utf-8") as f:
-        reader    = csv.reader(f)
-        cols      = next(reader)
-        row_count = sum(1 for _ in reader)
+    col_list = query = url = creds = ctx = None
 
     if not dry_run:
-        col_list = ", ".join(cols)
-        query    = f"INSERT INTO {database}.{table_name} ({col_list}) FORMAT CSVWithNames"
-        scheme   = "https" if secure else "http"
-        url      = f"{scheme}://{host}:{port}/?{urllib.parse.urlencode({'query': query})}"
-        with open(filepath, "rb") as f:
-            data = f.read()
-        creds = base64.b64encode(f"{user}:{password}".encode()).decode()
-        req = urllib.request.Request(url, data=data, method="POST")
-        req.add_header("Authorization",    f"Basic {creds}")
-        req.add_header("Content-Encoding", "gzip")
-        req.add_header("Content-Type",     "text/plain; charset=utf-8")
-        req.add_header("Content-Length",   str(len(data)))
-        ctx = _make_ssl_context() if secure else None
-        try:
-            with urllib.request.urlopen(req, context=ctx) as resp:
-                resp.read()
-        except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"HTTP {e.code}: {body[:500]}")
+        # Read header without loading whole file
+        with gzip.open(filepath, "rt", encoding="utf-8") as f:
+            header = next(csv.reader(f))
+        col_list = ", ".join(header)
+        query  = f"INSERT INTO {database}.{table_name} ({col_list}) FORMAT CSVWithNames"
+        scheme = "https" if secure else "http"
+        url    = f"{scheme}://{host}:{port}/?{urllib.parse.urlencode({'query': query})}"
+        creds  = base64.b64encode(f"{user}:{password}".encode()).decode()
+        ctx    = _make_ssl_context() if secure else None
 
-    return row_count, time.monotonic() - t0
+    total_rows = 0
+    batch: list = []
+
+    with gzip.open(filepath, "rt", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            batch.append(row)
+            if len(batch) >= csv_chunk_rows:
+                if not dry_run:
+                    _send_csv_chunk(batch, header, query, url, creds, ctx)
+                total_rows += len(batch)
+                elapsed = time.monotonic() - t0
+                rps = total_rows / elapsed if elapsed > 0 else 0
+                print(f"    {total_rows:>10,} rows  {rps:>8,.0f} rows/s", flush=True)
+                batch = []
+        if batch:
+            if not dry_run:
+                _send_csv_chunk(batch, header, query, url, creds, ctx)
+            total_rows += len(batch)
+
+    return total_rows, time.monotonic() - t0
 
 
 def load_file(filepath: str, table_name: str, batch_inserts: int,
@@ -181,8 +213,10 @@ def main():
     parser.add_argument("--no-secure",     dest="secure", action="store_false")
     parser.add_argument("--input-dir",     default="./sql-output",
                         help="Directory containing .sql files (default: ./sql-output)")
-    parser.add_argument("--batch-inserts", type=int, default=10,
-                        help="INSERT statements per request (default: 10 = ~50k rows)")
+    parser.add_argument("--batch-inserts",   type=int, default=10,
+                        help="INSERT statements per request for SQL files (default: 10)")
+    parser.add_argument("--csv-chunk-rows", type=int, default=50_000,
+                        help="Rows per gzip chunk for CSV files (default: 50 000)")
     parser.add_argument("--tables",        nargs="*", default=None,
                         help="Specific tables to load (default: all in input-dir)")
     parser.add_argument("--dry-run",       action="store_true",
@@ -244,7 +278,7 @@ def main():
                 print(f"  {event_type}  ({size_mb:.1f} MB)")
                 try:
                     rows, elapsed = _load_csv_file(
-                        filepath, table_name,
+                        filepath, table_name, args.csv_chunk_rows,
                         args.host, args.port, args.user, args.password,
                         args.database, args.secure, args.dry_run,
                     )
