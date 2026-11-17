@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IPA Scale-Up — Meeting Notes</title>
+  <style>
+    :root {
+      --bg:        #f1f5f9;
+      --surface:   #ffffff;
+      --cyan:      #06b6d4;
+      --cyan-dim:  #cffafe;
+      --cyan-dark: #0e7490;
+      --slate-900: #0f172a;
+      --slate-700: #334155;
+      --slate-500: #64748b;
+      --slate-300: #cbd5e1;
+      --slate-100: #f1f5f9;
+      --slate-50:  #f8fafc;
+      --border:    #e2e8f0;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--slate-700);
+      background: var(--bg);
+      padding: 2rem 1rem;
+    }
+
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--surface);
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(15,23,42,0.08), 0 8px 24px rgba(15,23,42,0.06);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--slate-900);
+      color: #fff;
+      padding: 2.2rem 2.4rem 1.8rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::before {
+      content: "";
+      position: absolute;
+      top: -60px; right: -60px;
+      width: 280px; height: 280px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(6,182,212,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .header::after {
+      content: "";
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--cyan) 0%, rgba(6,182,212,0.2) 100%);
+    }
+    .header .eyebrow {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      margin-bottom: 0.5rem;
+    }
+    .header h1 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      margin-bottom: 1.2rem;
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.8rem;
+    }
+    .meta-item .label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: var(--slate-500);
+      display: block;
+      margin-bottom: 2px;
+    }
+    .meta-item .value {
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: #e2e8f0;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 1px 7px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+      margin-left: 5px;
+      vertical-align: middle;
+    }
+    .badge-warn {
+      background: rgba(251,191,36,0.15);
+      border: 1px solid rgba(251,191,36,0.4);
+      color: #fbbf24;
+    }
+
+    /* ── Topics ── */
+    .topics { padding: 2rem 2.4rem; }
+
+    .topic {
+      display: grid;
+      grid-template-columns: 3px 1fr;
+      gap: 0 1.4rem;
+      margin-bottom: 2rem;
+      align-items: start;
+    }
+    .topic:last-child { margin-bottom: 0; }
+
+    .topic-line {
+      background: var(--cyan);
+      border-radius: 3px;
+      align-self: stretch;
+      min-height: 100%;
+    }
+
+    .topic-body {}
+
+    .topic-title {
+      font-size: 0.98rem;
+      font-weight: 700;
+      color: var(--slate-900);
+      margin-bottom: 0.55rem;
+    }
+
+    .topic-body p {
+      font-size: 0.92rem;
+      color: var(--slate-700);
+      margin-bottom: 0.5rem;
+    }
+    .topic-body p:last-child { margin-bottom: 0; }
+
+    .topic-body ul {
+      list-style: none;
+      padding: 0;
+      margin: 0.4rem 0 0.5rem 0;
+    }
+    .topic-body ul li {
+      font-size: 0.92rem;
+      color: var(--slate-700);
+      padding: 0.18rem 0 0.18rem 1rem;
+      position: relative;
+    }
+    .topic-body ul li::before {
+      content: "–";
+      position: absolute;
+      left: 0;
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    .note {
+      background: #ecfeff;
+      border: 1px solid #a5f3fc;
+      border-radius: 6px;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.88rem;
+      color: #164e63;
+      margin-top: 0.6rem;
+    }
+    .note strong { color: var(--cyan-dark); }
+
+    .mono {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.82em;
+      color: var(--cyan-dark);
+      background: #ecfeff;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* mapping table */
+    .map-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+      margin: 0.7rem 0 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .map-table thead tr { background: var(--slate-900); color: #e2e8f0; }
+    .map-table th {
+      text-align: left;
+      padding: 0.55rem 1rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .map-table th:first-child { color: var(--cyan); width: 2.2rem; }
+    .map-table td {
+      padding: 0.48rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--slate-700);
+    }
+    .map-table tbody tr:last-child td { border-bottom: none; }
+    .map-table tbody tr:nth-child(even) td { background: var(--slate-50); }
+    .map-table tbody tr:hover td { background: #ecfeff; }
+
+    /* divider */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0 2.4rem;
+    }
+
+    /* footer */
+    .footer {
+      background: var(--slate-50);
+      border-top: 1px solid var(--border);
+      padding: 0.9rem 2.4rem;
+      font-size: 0.75rem;
+      color: var(--slate-500);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="eyebrow">Meeting Notes</div>
+    <h1>IPA Scaling Up Data in Gold &mdash; Pt. 1</h1>
+    <div class="meta-row">
+      <div class="meta-item">
+        <span class="label">Recording</span>
+        <span class="value">IPA Scaling up Data in Gold Pt 1</span>
+      </div>
+      <div class="meta-item">
+        <span class="label">Duration</span>
+        <span class="value">~48 min</span>
+      </div>
+      <div class="meta-item">
+        <span class="label">Attendees</span>
+        <span class="value">Dylan, Sterling</span>
+      </div>
+      <div class="meta-item">
+        <span class="label">Prepared for</span>
+        <span class="value">Jorge <span class="badge badge-warn">not present</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="topics">
+
+    <!-- 1 -->
+    <div class="topic">
+      <div class="topic-line"></div>
+      <div class="topic-body">
+        <div class="topic-title">Snowflake access</div>
+        <p>Dylan walked through getting access to the Astra Dev Snowflake instance. It requires being added to an Active Directory group — the app shows up under Other Apps in Office 365 once you're in the group. Jorge will need an IT/AIT ticket to get access since the app wasn't showing up for everyone. Both Dev and Integration Snowflake environments are available once access is granted.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- 2 -->
+    <div class="topic">
+      <div class="topic-line"></div>
+      <div class="topic-body">
+        <div class="topic-title">What the data looks like today</div>
+        <p>Dylan screen-shared Snowflake and queried the raw tables. Dev has around <strong>37 million rows</strong> in the raw table; Integration was also pulled up. The raw tables are the unprocessed event payloads directly from Kafka — these are <em>not</em> what we're targeting for load testing.</p>
+        <p>There was a brief clarification about the layer terminology: raw/bronze is the bottom, business/silver is processed above that, and gold is the final analytics-ready layer in ClickHouse. The gold tables are the target.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- 3 -->
+    <div class="topic">
+      <div class="topic-line"></div>
+      <div class="topic-body">
+        <div class="topic-title">Topic to table mapping</div>
+        <p>There are seven Kafka topics that map one-to-one to seven ClickHouse gold tables. An eighth table visible in Snowflake is an internal Kafka Connect state table (<span class="mono">_connect_state</span>) — not an IPA event table, ignore it. The seven IPA topics and their corresponding gold tables are:</p>
+
+        <table class="map-table">
+          <thead>
+            <tr><th>#</th><th>Kafka Topic</th><th>ClickHouse Table</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td><span class="mono">astra-ps-patient-audit-events-v2</span></td><td><span class="mono">patient_audit_events</span></td></tr>
+            <tr><td>2</td><td><span class="mono">astra-ps-activity-events</span></td><td><span class="mono">activity_events</span></td></tr>
+            <tr><td>3</td><td><span class="mono">astra-pa-data-import-events</span></td><td><span class="mono">data_import_events</span></td></tr>
+            <tr><td>4</td><td><span class="mono">astra-ps-face-biometric-events-v2</span></td><td><span class="mono">face_biometric_events</span></td></tr>
+            <tr><td>5</td><td><span class="mono">astra-ps-configuration-audit-events</span></td><td><span class="mono">configuration_audit_events</span></td></tr>
+            <tr><td>6</td><td><span class="mono">astra-ps-photo-events-v2</span></td><td><span class="mono">photo_events</span></td></tr>
+            <tr><td>7</td><td><span class="mono">astra-ps-outbound-events</span></td><td><span class="mono">hl7_outbound_events</span></td></tr>
+          </tbody>
+        </table>
+
+        <p>Face biometric events were originally a question mark — the team asked IPA whether to include them even though ingestion wasn't fully working end-to-end at the time. IPA said to include them, so all seven are in scope.</p>
+
+        <div class="note">
+          <strong>Proto schemas:</strong> all seven topics have Protobuf schemas downloaded from Confluent Schema Registry. They live in <span class="mono">ipa-topic-schemas/</span> and define the field shapes for each event type. Each schema has a top-level envelope message with a <span class="mono">oneof data</span> covering the sub-event variants for that topic.
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- 4 -->
+    <div class="topic">
+      <div class="topic-line"></div>
+      <div class="topic-body">
+        <div class="topic-title">The kafka-generator repo</div>
+        <p>Dylan introduced a new repo he built on Friday — a Kafka event generator. It was built from scratch rather than extending the existing chKafka tooling, which had too much baggage. The generator can send synthetic Protobuf events to Kafka topics on a schedule.</p>
+        <p>Dylan mentioned he has a couple of pending PRs on this repo that need to be merged before it's fully usable — specifically the <span class="mono">feature-data-layer-topics</span> branch. Those are getting merged that afternoon.</p>
+        <p>The generator currently doesn't do sophisticated data sampling (i.e., it doesn't derive realistic value distributions from existing event data). That was flagged as a potential future improvement, particularly useful for load testing.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- 5 -->
+    <div class="topic">
+      <div class="topic-line"></div>
+      <div class="topic-body">
+        <div class="topic-title">Two approaches for getting data into ClickHouse</div>
+        <p>The team talked through two ways to populate the gold tables with enough volume for load testing:</p>
+        <ul>
+          <li><strong>Kafka path</strong> — use the kafka-generator to push synthetic events into the Kafka topics running in sandbox, then let the ClickHouse Kafka Connector consume those topics and write to the gold tables. Useful for testing the full connector pipeline and validating connector behavior end-to-end (e.g., reproduce a bug with the old connector version, then confirm the fix with the new version). Dylan noted the EAM streaming appliance is already running in sandbox and reading off topics without errors.</li>
+          <li><strong>Direct SQL path</strong> — bypass Kafka entirely. Use the proto schema shapes (and optionally a CSV sample from Snowflake as a realism reference) to generate a large file of SQL <span class="mono">INSERT</span> statements or CSV data, then load it straight into the sandbox ClickHouse Cloud instance. Faster to get volume in, since the end goal is data in ClickHouse.</li>
+        </ul>
+        <p>The direct SQL path was agreed on as the approach for load testing. The infrastructure can be reused or ported into the kafka-generator repo later if the Kafka path is also needed.</p>
+        <div class="note">
+          <strong>What was built:</strong> a Python script <span class="mono">generate_data.py</span> was written this session. It generates batched <span class="mono">INSERT</span> SQL or CSV for all seven gold tables based on the proto schemas, with no external dependencies. Defaults to 1M rows per table (~8 min). Column names are inferred from the proto field names — verify against the actual ClickHouse DDL before loading.
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- 6 -->
+    <div class="topic">
+      <div class="topic-line"></div>
+      <div class="topic-body">
+        <div class="topic-title">Manual mode for one-off events</div>
+        <p>A specific request came up for a "manual mode" — a way to fire a single synthetic event at a Kafka topic on demand, rather than running a continuous stream. The use case is targeted connector regression testing: send one event, confirm it lands correctly in ClickHouse, repeat with variations. This wasn't built yet and was noted as a follow-on item.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- 7 -->
+    <div class="topic">
+      <div class="topic-line"></div>
+      <div class="topic-body">
+        <div class="topic-title">Target environment</div>
+        <p>The sandbox ClickHouse Cloud instance is the safe place to do all of this work. Dev and Integration environments are not to be touched. Dylan confirmed the sandbox should be safe — it's only used by the team. The goal is to get enough volume in there to run meaningful queries across silver and gold and test query performance.</p>
+        <p>The option of spinning up a local ClickHouse instance in the clusters was briefly mentioned but dismissed — no reason to do that when the cloud instance is available.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- 8 -->
+    <div class="topic">
+      <div class="topic-line"></div>
+      <div class="topic-body">
+        <div class="topic-title">Snowflake CSV sample export</div>
+        <p>During the meeting Dylan exported a small non-prod sample from the Snowflake raw tables (not the business tables) to use as a shape and realism reference. The data is fake / non-production. He planned to send this over — it can be used to inform the generator's value distributions or validate that the generated data looks realistic alongside real event shapes.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- 9 -->
+    <div class="topic">
+      <div class="topic-line"></div>
+      <div class="topic-body">
+        <div class="topic-title">Next steps &amp; tomorrow's meeting</div>
+        <p>Jorge is invited to the follow-up meeting the next day to get up to speed and weigh in on direction — specifically whether the Kafka connector path needs to be validated before the deadline or whether direct-to-ClickHouse is sufficient to unblock load testing. A third teammate (name redacted in transcript) was also expected to attend and may have context on whether certain pieces are even needed.</p>
+      </div>
+    </div>
+
+  </div><!-- /.topics -->
+
+  <div class="footer">
+    <span>Summarized from recording transcript &nbsp;·&nbsp; schemas cross-referenced from <span class="mono">ipa-topic-schemas/</span></span>
+    <span>IPA Scale-Up Gold &nbsp;·&nbsp; Pt. 1</span>
+  </div>
+
+</div>
+</body>
+</html>
